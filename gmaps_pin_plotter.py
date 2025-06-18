@@ -100,18 +100,24 @@ df.loc[unknown.index, ['east', 'north']] = [coord_dict[url] for url in unknown]
 
 # Data finally complete ..
 
-# Compute pairwise squared distances (N x N matrix)
+# Compute pairwise squared distances between all points (N x N matrix)
 points = df[['east', 'north']].to_numpy()
 diffs = points[:, np.newaxis, :] - points[np.newaxis, :, :]  # shape: (N, N, 2)
 dists = np.linalg.norm(diffs, axis=2)  # Euclidean distances, shape: (N, N)
-
 # Set diagonal to np.inf so a point doesn't consider itself
 np.fill_diagonal(dists, np.inf)
 
-# Find the minimum distance and index for each point
+# The nearest distance to another point
 min_dists = np.min(dists, axis=1)
 
+# Compute density of points?
+# Here's a simple metric
+# Number of points closer than a radius away
+density = np.sum(dists < 1, axis=1)
+
+
 def scatter_in_data_units(points, diameters, color='red', dmin=.2, dmax=2, alpha=.8, ax=None):
+    # variable marker diameter
     if ax is None:
         ax = plt.gca()
     for (xi, yi), r in zip(points, diameters):
@@ -121,10 +127,11 @@ def scatter_in_data_units(points, diameters, color='red', dmin=.2, dmax=2, alpha
         ax.add_patch(e)
 
 
-def scatter_in_data_units_2(points, diameters, color='red', ax=None):
+def scatter_in_data_units_2(points, distances, color='red', ax=None):
+    # variable linewidth
     if ax is None:
         ax = plt.gca()
-    for (xi, yi), r in zip(points, diameters):
+    for (xi, yi), r in zip(points, distances):
         lw = max(0.2, r)
         lw = min(lw, 1.2)
         e = Ellipse((yi, xi), width=1.5, height=1.5, facecolor='none', edgecolor=color, lw=lw, alpha=1)
@@ -133,7 +140,8 @@ def scatter_in_data_units_2(points, diameters, color='red', ax=None):
 # Light mode
 ax = world.plot(color='white', edgecolor='black', alpha=1, lw=.3, figsize=(16,8))
 fig = ax.get_figure()
-scatter_in_data_units_2(points, min_dists, color='red')
+#scatter_in_data_units_2(points, min_dists, color='red')
+scatter_in_data_units_2(points, 2 - density/10, color='red')
 ax.axis('off')
 ax.set_xlim(-166.06777070063686, 158.60178343949042)
 ax.set_ylim(-58.512240116868426, 78.69029713186694)
@@ -144,7 +152,8 @@ plt.savefig('places_light.png', dpi=280, bbox_inches=bbox, pad_inches=0)
 # Dark mode
 ax = world.plot(color='black', edgecolor='white', alpha=.4, lw=.3, figsize=(16,9))
 fig = ax.get_figure()
-scatter_in_data_units_2(points, min_dists, color='limegreen')
+#scatter_in_data_units_2(points, min_dists, color='limegreen')
+scatter_in_data_units_2(points, 2 - density/10, color='limegreen')
 fig.patch.set_facecolor('black')
 ax.set_facecolor('black')
 ax.axis('off')
