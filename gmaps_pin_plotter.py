@@ -116,49 +116,108 @@ min_dists = np.min(dists, axis=1)
 density = np.sum(dists < 1, axis=1)
 
 
-def scatter_in_data_units(points, diameters, color='red', dmin=.2, dmax=2, alpha=.8, ax=None):
-    # variable marker diameter
-    if ax is None:
-        ax = plt.gca()
-    for (xi, yi), r in zip(points, diameters):
-        r = max(dmin, r)
-        r = min(r, dmax)
-        e = Ellipse((yi, xi), width=r, height=r, facecolor='none', edgecolor=color, lw=.7, alpha=alpha)
-        ax.add_patch(e)
+### Previous style: open circles (rings) whose linewidth scales with local
+### point density. Kept for reference -- superseded by the flat-dot style below.
+# def scatter_in_data_units(points, diameters, color='red', dmin=.2, dmax=2, alpha=.8, ax=None):
+#     # variable marker diameter
+#     if ax is None:
+#         ax = plt.gca()
+#     for (xi, yi), r in zip(points, diameters):
+#         r = max(dmin, r)
+#         r = min(r, dmax)
+#         e = Ellipse((yi, xi), width=r, height=r, facecolor='none', edgecolor=color, lw=.7, alpha=alpha)
+#         ax.add_patch(e)
+#
+#
+# def scatter_in_data_units_2(points, distances, color='red', ax=None):
+#     # variable linewidth
+#     if ax is None:
+#         ax = plt.gca()
+#     for (xi, yi), r in zip(points, distances):
+#         lw = max(0.2, r)
+#         lw = min(lw, 1.2)
+#         e = Ellipse((yi, xi), width=1.5, height=1.5, facecolor='none', edgecolor=color, lw=lw, alpha=1)
+#         ax.add_patch(e)
+#
+# # Light mode
+# ax = world.plot(color='white', edgecolor='black', alpha=1, lw=.3, figsize=(16,8))
+# fig = ax.get_figure()
+# #scatter_in_data_units_2(points, min_dists, color='red')
+# scatter_in_data_units_2(points, 2 - density/10, color='red')
+# ax.axis('off')
+# ax.set_xlim(-166.06777070063686, 158.60178343949042)
+# ax.set_ylim(-58.512240116868426, 78.69029713186694)
+# fig.canvas.draw()
+# bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+# plt.savefig('places_light.png', dpi=280, bbox_inches=bbox, pad_inches=0)
+#
+# # Dark mode
+# ax = world.plot(color='black', edgecolor='white', alpha=.4, lw=.3, figsize=(16,9))
+# fig = ax.get_figure()
+# #scatter_in_data_units_2(points, min_dists, color='limegreen')
+# scatter_in_data_units_2(points, 2 - density/10, color='limegreen')
+# fig.patch.set_facecolor('black')
+# ax.set_facecolor('black')
+# ax.axis('off')
+# ax.set_xlim(-166.06777070063686, 158.60178343949042)
+# ax.set_ylim(-58.512240116868426, 78.69029713186694)
+# fig.canvas.draw()
+# bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+# plt.savefig('places_dark.png', dpi=280, facecolor='black', bbox_inches=bbox, pad_inches=0)
+
+### Current style: flat dots.
+# The rings above turn dense clusters (Bay Area, western Europe) into
+# unreadable blobs of overlapping outlines. Flat markers with no per-point
+# sizing avoid that: overlap simply reads as brightness/saturation via normal
+# alpha compositing, so clusters bloom while isolated pins stay legible.
+
+MAP_XLIM = (-166.06777070063686, 158.60178343949042)
+
+# The old northern limit of 78.69 sliced the top off Greenland, the Canadian
+# arctic and northern Siberia in a flat line. It didn't have to: the axes keeps
+# a 1:1 degree aspect, and 324.7 degrees of longitude against 137.2 of latitude
+# is wider than the 16:9 figure, so the frame is width-limited and the leftover
+# vertical space was just being painted as empty ocean above the cut. Extending
+# north past the northernmost land (Greenland, 83.63) spends that slack on map
+# instead. It costs nothing elsewhere -- the scale is set by the width, so the
+# land renders at exactly the same size, and whatever vertical space is still
+# left over stays background-coloured, which reads as more ocean rather than as
+# letterbox bars.
+NORTH_MARGIN = 1.  # degrees of open water above the northernmost land
+MAP_YLIM = (-58.512240116868426, world.total_bounds[3] + NORTH_MARGIN)
+
+# points[:, 1] lines up with the x-axis (longitude) and points[:, 0] with the
+# y-axis (latitude) -- matches how scatter_in_data_units_2 plotted
+# Ellipse((yi, xi)), i.e. despite the 'east'/'north' column names.
+xs_geo = points[:, 1]
+ys_geo = points[:, 0]
+
+DOT_THEMES = {
+    # Dark mode: dots lighter than the land, overlap brightens toward white.
+    'dark': dict(out='places_dark.png', color='#7CFC9C', alpha=.55,
+                 bg='#050506', land='#111214', land_edge='#2a2d30'),
+    # Light mode: dots darker than the land, overlap deepens the red.
+    'light': dict(out='places_light.png', color='#D62828', alpha=.45,
+                  bg='#FBFAF7', land='#FFFFFF', land_edge='#B8B6AE'),
+}
 
 
-def scatter_in_data_units_2(points, distances, color='red', ax=None):
-    # variable linewidth
-    if ax is None:
-        ax = plt.gca()
-    for (xi, yi), r in zip(points, distances):
-        lw = max(0.2, r)
-        lw = min(lw, 1.2)
-        e = Ellipse((yi, xi), width=1.5, height=1.5, facecolor='none', edgecolor=color, lw=lw, alpha=1)
-        ax.add_patch(e)
+def render_dots(theme='dark', size=14, marker='o', dpi=200):
+    cfg = DOT_THEMES[theme]
+    fig, ax = plt.subplots(figsize=(16, 9), dpi=dpi)
+    fig.patch.set_facecolor(cfg['bg'])
+    ax.set_facecolor(cfg['bg'])
+    world.plot(ax=ax, color=cfg['land'], edgecolor=cfg['land_edge'], linewidth=.3, zorder=1)
+    ax.scatter(xs_geo, ys_geo, s=size, c=cfg['color'], marker=marker, alpha=cfg['alpha'],
+               linewidths=0, zorder=2)
+    ax.set_xlim(*MAP_XLIM)
+    ax.set_ylim(*MAP_YLIM)
+    ax.axis('off')
+    fig.tight_layout(pad=0)
+    fig.savefig(cfg['out'], dpi=dpi, facecolor=cfg['bg'])
+    plt.close(fig)
+    print(f"Wrote {cfg['out']}")
 
-# Light mode
-ax = world.plot(color='white', edgecolor='black', alpha=1, lw=.3, figsize=(16,8))
-fig = ax.get_figure()
-#scatter_in_data_units_2(points, min_dists, color='red')
-scatter_in_data_units_2(points, 2 - density/10, color='red')
-ax.axis('off')
-ax.set_xlim(-166.06777070063686, 158.60178343949042)
-ax.set_ylim(-58.512240116868426, 78.69029713186694)
-fig.canvas.draw()
-bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-plt.savefig('places_light.png', dpi=280, bbox_inches=bbox, pad_inches=0)
 
-# Dark mode
-ax = world.plot(color='black', edgecolor='white', alpha=.4, lw=.3, figsize=(16,9))
-fig = ax.get_figure()
-#scatter_in_data_units_2(points, min_dists, color='limegreen')
-scatter_in_data_units_2(points, 2 - density/10, color='limegreen')
-fig.patch.set_facecolor('black')
-ax.set_facecolor('black')
-ax.axis('off')
-ax.set_xlim(-166.06777070063686, 158.60178343949042)
-ax.set_ylim(-58.512240116868426, 78.69029713186694)
-fig.canvas.draw()
-bbox = ax.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
-plt.savefig('places_dark.png', dpi=280, facecolor='black', bbox_inches=bbox, pad_inches=0)
+render_dots('dark')
+render_dots('light')
