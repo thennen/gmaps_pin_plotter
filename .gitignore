@@ -1,1 +1,3 @@
 *.json
+.chrome-takeout-profile/
+.takeout_downloads/
